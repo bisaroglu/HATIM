@@ -1,0 +1,103 @@
+@import url('https://fonts.googleapis.com/css2?family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&family=Source+Sans+3:wght@300;400;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Skip-to-content — WCAG 2.4.1 ─────────────────────────────────────────── */
+@layer components {
+  .skip-link {
+    @apply sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[9999]
+           focus:px-4 focus:py-2 focus:rounded focus:bg-gold-dim focus:text-gold-text
+           focus:font-sans focus:text-label-md focus:uppercase focus:tracking-widest
+           focus:shadow-focus-gold;
+  }
+}
+
+/* ─── Dot-grid arka planı (Auth ekranları) ──────────────────────────────────── */
+@layer components {
+  .dot-grid {
+    /* Dark mod varsayılan (dark: prefix ile override edilir) */
+    background-image: radial-gradient(
+      circle,
+      theme('colors.light.outline') 1px,
+      transparent 1px
+    );
+    background-size: 24px 24px;
+  }
+
+  .dark .dot-grid {
+    background-image: radial-gradient(
+      circle,
+      rgba(154, 143, 128, 0.3) 1px,
+      transparent 1px
+    );
+  }
+}
+
+/* ─── Yatay scroll çubuğunu gizle (mobil filtre pill'leri) ─────────────────── */
+@layer utilities {
+  .hide-scrollbar {
+    scrollbar-width: none;       /* Firefox */
+    -ms-overflow-style: none;    /* IE / Edge */
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;               /* Chrome / Safari */
+  }
+}
+
+/* ─── Base layer — WCAG-uyumlu global varsayılanlar ─────────────────────────── */
+@layer base {
+  html {
+    @apply scroll-smooth;
+    color-scheme: light dark;
+  }
+
+  /*
+    WCAG 1.4.3 — Minimum Contrast (AA): 4.5:1 normal metin
+    Light mode: #0d1117 on #ffffff = ~19:1 ✓
+    Dark  mode: #d4e4fa on #051424 = ~12:1 ✓
+
+    Buradaki atamalar Tailwind utility class'larının yokluğunda
+    devreye giren güvenli taban değerleridir.
+    Utility class varsa o kazanır — bu yüzden bileşenleri de düzelttik.
+  */
+  :root {
+    /* Alternatif bölüm zemin rengi — light */
+    --section-alt-bg: #f8f9fb;
+  }
+
+  .dark {
+    /* Alternatif bölüm zemin rengi — dark */
+    --section-alt-bg: #010f1f;
+  }
+
+  body {
+    /* Light mode default: near-black metin, beyaz zemin */
+    @apply font-sans antialiased bg-white text-slate-900;
+  }
+
+  .dark body {
+    /* Dark mode: kırık beyaz metin, derin lacivert zemin */
+    background-color: #051424;
+    color: #d4e4fa;
+  }
+
+  /* Başlıklar serif — editorial feel */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-serif;
+    /* Başlıklar da net koyu tona dönsün (dark: prefix'li override bileşende) */
+    color: inherit;
+  }
+
+  /* Odak görünür — WCAG 2.4.7 */
+  :focus-visible {
+    @apply outline-none ring-2 ring-gold ring-offset-2;
+  }
+
+  /* Varsayılan link — alt çizgi + kontrast renk */
+  a {
+    color: inherit;
+    text-decoration-color: transparent;
+  }
+}
