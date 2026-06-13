@@ -4,8 +4,11 @@ import { ThemeToggle } from '@/components/common'
 import { useAuthStore, useIsAuthenticated } from '@/store/auth.store'
 
 const NAV_LINKS = [
-  { to: '/hatimler', label: 'Hatimler' },
-  { to: '/hakkimizda', label: 'Hakkımızda' },
+  { to: '/',              label: 'Ana Sayfa',   icon: null },
+  { to: '/hatimler',      label: 'Hatimler',    icon: null },
+  { to: '/ai-asistan',   label: 'AI Asistanı', icon: '✦' },
+  { to: '/hakkimizda',    label: 'Hakkımızda',  icon: null },
+  { to: '/geri-bildirim', label: 'Geri Bildirim', icon: null },
 ]
 
 export function Navbar() {
@@ -23,7 +26,6 @@ export function Navbar() {
     <header
       className={[
         'sticky top-0 z-50 w-full',
-        // Light: beyaz/yarı saydam; Dark: lacivert/yarı saydam
         'bg-white/80 backdrop-blur-nav border-b border-light-outline',
         'dark:bg-dark-bg/80 dark:border-dark-outline',
       ].join(' ')}
@@ -32,45 +34,48 @@ export function Navbar() {
         aria-label="Ana navigasyon"
         className="container flex items-center justify-between h-16"
       >
-        {/* ── Logo ─────────────────────────────────────────────────────────── */}
+        {/* Logo */}
         <Link
           to="/"
           className={[
             'font-serif text-xl font-normal tracking-tight',
-            // Light: koyu metin; Dark: açık kırık beyaz
             'text-slate-900 dark:text-dark-text',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold rounded',
           ].join(' ')}
-          aria-label="GlobalHatim — Ana Sayfa"
+          aria-label="GlobalHatim Ana Sayfa"
         >
           Global<span className="text-gold-deep dark:text-gold">Hatim</span>
         </Link>
 
-        {/* ── Desktop nav linkleri ──────────────────────────────────────────── */}
+        {/* Desktop nav linkleri */}
         <ul className="hidden md:flex items-center gap-8" role="list">
           {NAV_LINKS.map((link) => (
             <li key={link.to}>
               <NavLink
                 to={link.to}
+                end={link.to === '/'}
                 className={({ isActive }) =>
                   [
-                    'font-sans text-label-md uppercase tracking-widest transition-colors duration-150',
+                    'inline-flex items-center gap-1.5 font-sans text-label-md uppercase tracking-widest transition-colors duration-150',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold rounded px-1',
                     isActive
-                      ? // Aktif: light → altın koyu; dark → altın
-                        'text-gold-deep dark:text-gold font-semibold'
-                      : // Pasif: light → koyu slate; dark → muted
-                        'text-slate-600 dark:text-dark-text-muted hover:text-slate-900 dark:hover:text-dark-text',
+                      ? 'text-gold-deep dark:text-gold font-semibold'
+                      : 'text-slate-600 dark:text-dark-text-muted hover:text-slate-900 dark:hover:text-dark-text',
                   ].join(' ')
                 }
               >
+                {link.icon && (
+                  <span aria-hidden="true" className="text-gold-deep dark:text-gold text-xs">
+                    {link.icon}
+                  </span>
+                )}
                 {link.label}
               </NavLink>
             </li>
           ))}
         </ul>
 
-        {/* ── Sağ grup ─────────────────────────────────────────────────────── */}
+        {/* Sag grup */}
         <div className="hidden md:flex items-center gap-4">
           <ThemeToggle />
 
@@ -96,30 +101,27 @@ export function Navbar() {
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold rounded px-1',
                 ].join(' ')}
               >
-                Çıkış
+                Cikis
               </button>
             </>
           ) : (
-            // CTA butonu — Light: siyah zemin beyaz metin | Dark: altın zemin koyu metin
             <Link
               to="/auth"
               className={[
                 'font-sans text-label-md uppercase tracking-widest',
                 'px-4 py-2 rounded transition-opacity duration-150',
-                // Light mode
                 'bg-slate-900 text-white hover:bg-slate-700',
-                // Dark mode
                 'dark:bg-gold-dim dark:text-gold-text dark:hover:bg-gold',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold',
                 'focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-dark-bg',
               ].join(' ')}
             >
-              Giriş Yap
+              Giris Yap
             </Link>
           )}
         </div>
 
-        {/* ── Mobile hamburger ─────────────────────────────────────────────── */}
+        {/* Mobile hamburger */}
         <button
           className={[
             'md:hidden p-2 rounded',
@@ -130,7 +132,7 @@ export function Navbar() {
           onClick={() => setMenuOpen((o) => !o)}
           aria-expanded={menuOpen}
           aria-controls="mobile-menu"
-          aria-label={menuOpen ? 'Menüyü kapat' : 'Menüyü aç'}
+          aria-label={menuOpen ? 'Menuyu kapat' : 'Menuyu ac'}
         >
           <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             {menuOpen ? (
@@ -142,7 +144,7 @@ export function Navbar() {
         </button>
       </nav>
 
-      {/* ── Mobile menu ──────────────────────────────────────────────────────── */}
+      {/* Mobile menu */}
       {menuOpen && (
         <div
           id="mobile-menu"
@@ -153,10 +155,11 @@ export function Navbar() {
               <NavLink
                 key={link.to}
                 to={link.to}
+                end={link.to === '/'}
                 onClick={() => setMenuOpen(false)}
                 className={({ isActive }) =>
                   [
-                    'font-sans text-label-md uppercase tracking-widest py-2',
+                    'inline-flex items-center gap-1.5 font-sans text-label-md uppercase tracking-widest py-2',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold rounded px-1',
                     isActive
                       ? 'text-gold-deep dark:text-gold font-semibold'
@@ -164,6 +167,11 @@ export function Navbar() {
                   ].join(' ')
                 }
               >
+                {link.icon && (
+                  <span aria-hidden="true" className="text-gold-deep dark:text-gold text-xs">
+                    {link.icon}
+                  </span>
+                )}
                 {link.label}
               </NavLink>
             ))}
@@ -181,7 +189,7 @@ export function Navbar() {
                     'dark:bg-gold-dim dark:text-gold-text',
                   ].join(' ')}
                 >
-                  Giriş Yap
+                  Giris Yap
                 </Link>
               )}
             </div>

@@ -23,6 +23,7 @@ public interface IApplicationDbContext
     DbSet<ReadingLog>        ReadingLogs        { get; }
     DbSet<RotationSchedule>  RotationSchedules  { get; }
     DbSet<ContactMessage>    ContactMessages    { get; }
+    DbSet<Feedback>          Feedbacks          { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

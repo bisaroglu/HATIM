@@ -37,16 +37,18 @@ try
         {
             options.TokenValidationParameters = new TokenValidationParameters
             {
-                ValidateIssuer = true,
-                ValidateAudience = true,
-                ValidateLifetime = true,
+                ValidateIssuer           = true,
+                ValidateAudience         = true,
+                ValidateLifetime         = true,
                 ValidateIssuerSigningKey = true,
-                ValidIssuer = builder.Configuration["Jwt:Issuer"],
-                ValidAudience = builder.Configuration["Jwt:Audience"],
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+                ValidIssuer              = builder.Configuration["Jwt:Issuer"],
+                ValidAudience            = builder.Configuration["Jwt:Audience"],
+                IssuerSigningKey         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
             };
         });
 
+    // Varsayılan yetkilendirme politikası — controller bazlı [Authorize] attr gerektirir.
+    // FallbackPolicy tanımlanmadığı için attr olmayan endpointler herkese açıktır.
     builder.Services.AddAuthorization();
 
     // ── Controllers ───────────────────────────────────────────────────────────
@@ -63,19 +65,19 @@ try
     {
         c.SwaggerDoc("v1", new OpenApiInfo
         {
-            Title = "GlobalHatim API",
-            Version = "v1",
+            Title       = "GlobalHatim API",
+            Version     = "v1",
             Description = "Hatim yönetim sistemi REST API'si"
         });
 
         // JWT Swagger desteği
         c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
         {
-            Name = "Authorization",
-            Type = SecuritySchemeType.ApiKey,
-            Scheme = "Bearer",
+            Name        = "Authorization",
+            Type        = SecuritySchemeType.ApiKey,
+            Scheme      = "Bearer",
             BearerFormat = "JWT",
-            In = ParameterLocation.Header,
+            In          = ParameterLocation.Header,
             Description = "JWT token: Bearer {token}"
         });
         c.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -122,41 +124,57 @@ try
     // ── Health checks ─────────────────────────────────────────────────────────
     builder.Services.AddHealthChecks();
 
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Build ─────────────────────────────────────────────────────────────────
     var app = builder.Build();
-    // ─────────────────────────────────────────────────────────────────────────
 
-    await app.SeedDatabaseAsync();
+    // ── Middleware pipeline ───────────────────────────────────────────────────
 
+    // 1. Global exception handler — tüm katmanların önünde olmalı
     app.UseExceptionHandling();
 
+    // 2. Swagger — yalnızca development'ta
     if (app.Environment.IsDevelopment())
     {
         app.UseSwagger();
         app.UseSwaggerUI(c =>
         {
             c.SwaggerEndpoint("/swagger/v1/swagger.json", "GlobalHatim API v1");
-            c.RoutePrefix = "swagger"; // URL'yi kesin olarak localhost:5000/swagger yapar
+            c.RoutePrefix = "swagger";
         });
     }
 
-    app.UseHttpsRedirection();
-    app.UseSerilogRequestLogging();
+    // 3. HTTPS yönlendirme — yalnızca production'da aktif.
+    //    Development'ta Vite proxy HTTP üzerinden bağlandığı için
+    //    bu middleware 301 döndürüp proxy zincirini kırıyordu.
+    if (!app.Environment.IsDevelopment())
+    {
+        app.UseHttpsRedirection();
+    }
+
+    // 4. CORS — Authentication'dan önce
     app.UseCors("DefaultPolicy");
 
+    // 5. Kimlik doğrulama & yetkilendirme
     app.UseAuthentication();
     app.UseAuthorization();
 
+    // 6. Controller route'ları
     app.MapControllers();
+
+    // 7. Health check endpoint
     app.MapHealthChecks("/health");
 
-    app.Run();
+    // ── Veritabanı seed işlemleri ─────────────────────────────────────────────
+    await app.SeedDatabaseAsync();
+
+    // ── Çalıştır ──────────────────────────────────────────────────────────────
+    await app.RunAsync();
 }
-catch (Exception ex) when (ex is not HostAbortedException)
+catch (Exception ex)
 {
     Log.Fatal(ex, "Uygulama başlatılamadı.");
 }
 finally
 {
-    Log.CloseAndFlush();
+    await Log.CloseAndFlushAsync();
 }

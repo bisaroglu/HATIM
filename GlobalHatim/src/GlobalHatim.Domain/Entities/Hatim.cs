@@ -17,7 +17,12 @@ public sealed class Hatim : BaseEntity
     public HatimCategory? Category { get; private set; }
 
     // ── Plan ve durum ────────────────────────────────────────────
+    /// <summary>Hatim türü: Fixed, Cyclic, Daily, Weekly</summary>
     public PlanType PlanType { get; private set; }
+
+    /// <summary>Okuma hızı — cüz başına ayrılan süre; DeadlineAt hesabında kullanılır.</summary>
+    public ReadPacing ReadPacing { get; private set; } = ReadPacing.Every2Days1Juz;
+
     public HatimStatus Status { get; private set; } = HatimStatus.Draft;
 
     // ── Erişim kontrolü ─────────────────────────────────────────
@@ -47,7 +52,8 @@ public sealed class Hatim : BaseEntity
     public ICollection<HatimJoinRequest> JoinRequests { get; private set; } = [];
 
     // ── Hesaplanmış özellikler ───────────────────────────────────
-    public bool IsRotating => PlanType is PlanType.WeeklyNoAccel or PlanType.LongTermHybrid;
+    /// <summary>Döngülü hatim → tüm cüzler tamamlandığında yeni döngü başlar.</summary>
+    public bool IsRotating => PlanType is PlanType.Cyclic;
 
     private Hatim() { }
 
@@ -57,6 +63,7 @@ public sealed class Hatim : BaseEntity
         string? description,
         Guid creatorUserId,
         PlanType planType,
+        ReadPacing readPacing,
         DateOnly startDate,
         bool isPublic = true,
         int? categoryId = null,
@@ -73,6 +80,7 @@ public sealed class Hatim : BaseEntity
             Description   = description?.Trim(),
             CreatorUserId = creatorUserId,
             PlanType      = planType,
+            ReadPacing    = readPacing,
             StartDate     = startDate,
             EndDate       = endDate,
             IsPublic      = isPublic,

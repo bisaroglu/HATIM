@@ -6,7 +6,9 @@ import axios, {
 import type { ApiError } from '@/types'
 
 // ─── Sabitler ────────────────────────────────────────────────────────────────
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000/api'
+// Relative URL → Vite proxy (/api → localhost:5000) devralır.
+// Böylece telefon da dahil tüm cihazlar proxy üzerinden backend'e erişir.
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 const TOKEN_KEY = 'gh_access_token'
 const REFRESH_KEY = 'gh_refresh_token'
 
@@ -90,15 +92,20 @@ apiClient.interceptors.response.use(
       }
 
       try {
+        // TODO: backend refresh endpoint yolunu doğrula → /Auth/refresh veya /Auth/refresh-token
         const { data } = await axios.post<{
-          accessToken: string
-          refreshToken: string
-        }>(`${BASE_URL}/auth/refresh`, { refreshToken })
+          accessToken?: string
+          token?: string
+          refreshToken?: string
+          refresh_token?: string
+        }>(`${BASE_URL}/Auth/refresh`, { refreshToken })
 
-        tokenStorage.setTokens(data.accessToken, data.refreshToken)
-        apiClient.defaults.headers.common.Authorization = `Bearer ${data.accessToken}`
-        processQueue(null, data.accessToken)
-        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`
+        const newAccess  = data.accessToken ?? data.token ?? ''
+        const newRefresh = data.refreshToken ?? data.refresh_token ?? ''
+        tokenStorage.setTokens(newAccess, newRefresh)
+        apiClient.defaults.headers.common.Authorization = `Bearer ${newAccess}`
+        processQueue(null, newAccess)
+        originalRequest.headers.Authorization = `Bearer ${newAccess}`
         return apiClient(originalRequest)
       } catch (refreshError) {
         processQueue(refreshError, null)

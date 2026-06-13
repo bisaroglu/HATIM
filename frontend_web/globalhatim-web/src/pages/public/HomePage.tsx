@@ -343,8 +343,10 @@ function HatimCard({ hatim }: { hatim: ActiveHatimCard }) {
 // 4. SON AKTİF HATİMLER BÖLÜMܼ
 // ─────────────────────────────────────────────────────────────────────────────
 
+const ACTIVE_HATIMS_LIMIT = 4
+
 function ActiveHatimsSection() {
-  const { hatims, isLoading } = useActiveHatims(4)
+  const { hatims, isLoading, error, refetch } = useActiveHatims(ACTIVE_HATIMS_LIMIT)
 
   return (
     <section
@@ -385,18 +387,60 @@ function ActiveHatimsSection() {
           </Link>
         </div>
 
+        {/* Hata durumu */}
+        {error && !isLoading && (
+          <div
+            role="alert"
+            aria-live="polite"
+            className={[
+              'flex items-start gap-3 p-4 rounded-lg border',
+              'bg-rose-50 border-rose-200 text-rose-700',
+              'dark:bg-rose-900/20 dark:border-rose-800/40 dark:text-rose-300',
+            ].join(' ')}
+          >
+            <svg aria-hidden="true" className="h-5 w-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+            </svg>
+            <div className="flex-1 font-sans text-body-md">
+              <p>{error}</p>
+              <button
+                type="button"
+                onClick={refetch}
+                className={[
+                  'mt-1.5 font-semibold underline underline-offset-2',
+                  'hover:no-underline transition-all duration-150',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded',
+                ].join(' ')}
+              >
+                Tekrar dene
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Loading skeleton */}
-        {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5" aria-busy="true" aria-label="Hatimler yükleniyor">
-            {[1, 2].map((i) => (
+        {isLoading && (
+          <div
+            className="grid grid-cols-1 md:grid-cols-2 gap-5"
+            aria-busy="true"
+            aria-label="Hatimler yükleniyor"
+          >
+            {Array.from({ length: ACTIVE_HATIMS_LIMIT }).map((_, i) => (
               <div
                 key={i}
-                className="h-48 rounded-lg border border-slate-200 dark:border-dark-outline bg-slate-100 dark:bg-dark-surface animate-pulse"
+                className={[
+                  'h-48 rounded-lg border',
+                  'border-slate-200 bg-slate-100 animate-pulse',
+                  'dark:border-dark-outline dark:bg-dark-surface',
+                ].join(' ')}
+                aria-hidden="true"
               />
             ))}
           </div>
-        ) : (
-          /* Hatim kartları grid — mobile: tek kolon, md: 2 kolon */
+        )}
+
+        {/* Hatim kartları grid — mobile: tek kolon, md: 2 kolon */}
+        {!isLoading && !error && (
           <ul
             className="grid grid-cols-1 md:grid-cols-2 gap-5"
             role="list"

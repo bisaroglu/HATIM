@@ -1,5 +1,6 @@
 using GlobalHatim.Domain.Entities;
 using GlobalHatim.Domain.Enums;
+using GlobalHatim.Infrastructure.Persistence.Converters;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -21,7 +22,14 @@ public sealed class HatimConfiguration : IEntityTypeConfiguration<Hatim>
 
         builder.Property(h => h.PlanType)
             .HasColumnName("plan_type")
-            .HasConversion<string>()
+            .HasConversion(new PlanTypeConverter())   // eski DB adlarını zararsızca eşler
+            .IsRequired();
+
+        // ReadPacing: okuma hızı — AllocateJuzCommand DeadlineAt hesabında kullanır
+        builder.Property(h => h.ReadPacing)
+            .HasColumnName("read_pacing")
+            .HasConversion(new ReadPacingConverter()) // eski DB adlarını zararsızca eşler
+            .HasDefaultValue(ReadPacing.Every2Days1Juz)
             .IsRequired();
 
         builder.Property(h => h.Status)

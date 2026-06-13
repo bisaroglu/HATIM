@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import type { Participant } from '@/components/common'
 import { hatimService } from '@/services/hatim.service'
+import type { HatimListItem } from '@/hooks/useHatims'
+import { parseApiError } from '@/utils/apiError'
 
 // ─── Tip tanımları ────────────────────────────────────────────────────────────
 export interface ActiveHatimCard {
@@ -10,58 +12,29 @@ export interface ActiveHatimCard {
   completedJuz: number
   totalJuz: number
   participants: Participant[]
-  /** Opsiyonel durum etiketi — "GÜNCEL", "YAKINDA" vb. */
+  /** Opsiyonel durum etiketi — "GÜNCEL", "AÇIK" vb. */
   badgeLabel?: string
   badgeVariant?: 'gold' | 'blue' | 'green' | 'slate'
 }
 
-// ─── Mock veri — API hazır olana kadar ───────────────────────────────────────
-const MOCK_DATA: ActiveHatimCard[] = [
-  {
-    id: 'mock-1',
-    title: 'Ramazan Birliği',
-    subtitle: '1. Cüz\'den Başlıyor',
-    completedJuz: 24,
-    totalJuz: 30,
-    badgeLabel: 'GÜNCEL',
-    badgeVariant: 'gold',
-    participants: [
-      { id: 'p1', initials: 'AY', bgColor: 'bg-amber-500' },
-      { id: 'p2', initials: 'MK', bgColor: 'bg-sky-500' },
-      { id: 'p3', initials: 'FÇ', bgColor: 'bg-emerald-500' },
-      { id: 'p4', initials: 'HB', bgColor: 'bg-violet-500' },
-      { id: 'p5', initials: 'ZY', bgColor: 'bg-rose-500' },
-      { id: 'p6', initials: 'OK', bgColor: 'bg-teal-500' },
-    ],
-  },
-  {
-    id: 'mock-2',
-    title: 'Küresel Cuma',
-    subtitle: 'Haftalık Topluluk Hatmi',
-    completedJuz: 5,
-    totalJuz: 30,
-    badgeLabel: 'AÇIK',
-    badgeVariant: 'blue',
-    participants: [
-      { id: 'p7', initials: 'SK', bgColor: 'bg-sky-500' },
-      { id: 'p8', initials: 'NE', bgColor: 'bg-violet-500' },
-      { id: 'p9', initials: 'BT', bgColor: 'bg-amber-500' },
-    ],
-  },
-]
+// ─── HatimListItem → ActiveHatimCard dönüştürücü ─────────────────────────────
+const STATUS_BADGE: Record<string, { label: string; variant: ActiveHatimCard['badgeVariant'] }> = {
+  active:    { label: 'GÜNCEL', variant: 'gold' },
+  completed: { label: 'TAMAMLANDI', variant: 'green' },
+  pending:   { label: 'YAKINDA', variant: 'blue' },
+}
 
-// ─── API yanıtını ActiveHatimCard formatına dönüştür ─────────────────────────
-function mapApiToCard(item: Record<string, unknown>): ActiveHatimCard {
-  // TODO: Backend hatim modeliyle eşleştir
+function mapToCard(item: HatimListItem): ActiveHatimCard {
+  const badge = STATUS_BADGE[item.status] ?? { label: undefined, variant: 'slate' }
   return {
-    id: String(item.id ?? ''),
-    title: String(item.title ?? ''),
-    subtitle: String(item.description ?? ''),
-    completedJuz: Number(item.completedCount ?? 0),
-    totalJuz: 30,
-    participants: [],
-    badgeLabel: item.status === 'active' ? 'GÜNCEL' : undefined,
-    badgeVariant: 'gold',
+    id:           item.id,
+    title:        item.title,
+    subtitle:     item.description,
+    completedJuz: item.completedJuz,
+    totalJuz:     item.totalJuz,
+    participants: item.participants ?? [],
+    badgeLabel:   badge.label,
+    badgeVariant: badge.variant,
   }
 }
 
@@ -88,21 +61,13 @@ export function useActiveHatims(limit = 4): UseActiveHatimsResult {
 
     hatimService
       .getAll({ page: 1, pageSize: limit, status: 'active' })
-      .then((res) => {
+      .then((items) => {
         if (cancelled) return
-        if (res.items.length > 0) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          setHatims(res.items.map((item) => mapApiToCard(item as any)))
-        } else {
-          // API boş dönerse mock data göster
-          setHatims(MOCK_DATA.slice(0, limit))
-        }
+        setHatims(items.slice(0, limit).map(mapToCard))
       })
-      .catch(() => {
+      .catch((err) => {
         if (cancelled) return
-        // API erişilemiyorsa mock data'ya düş
-        setHatims(MOCK_DATA.slice(0, limit))
-        setError(null) // Geliştirme aşamasında hata UI'ı gösterme
+        setError(parseApiError(err).message)
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false)

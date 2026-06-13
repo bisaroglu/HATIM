@@ -87,8 +87,16 @@ public sealed class CompleteJuzCommandHandler
         // ── 2. Yetki kontrolü ────────────────────────────────────────────────
         if (request.RequesterUserId.HasValue)
         {
-            if (allocation.AssignedUserId != request.RequesterUserId)
-                throw new UnauthorizedAccessException("Bu cüz size atanmamış.");
+            // İzin verilir:
+            //   a) Cüz zaten bu kullanıcıya atanmışsa (normal akış)
+            //   b) Cüz misafire/vekâleten atanmışsa VE isteği yapan kullanıcı
+            //      hatimin kurucusuysa (örn. görme engelli yakın adına alınan cüz)
+            var isCreatorCompletingGuestJuz = allocation.IsAssignedToGuest
+                                             && allocation.Hatim.CreatorUserId == request.RequesterUserId;
+
+            if (allocation.AssignedUserId != request.RequesterUserId && !isCreatorCompletingGuestJuz)
+                throw new UnauthorizedAccessException(
+                    "Bu cüz size atanmamış. Misafir adına alınan cüzleri yalnızca hatim kurucusu tamamlayabilir.");
         }
         else
         {

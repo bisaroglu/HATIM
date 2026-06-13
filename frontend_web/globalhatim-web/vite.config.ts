@@ -10,6 +10,7 @@ export default defineConfig({
     },
   },
   server: {
+    host: true,   // 0.0.0.0 — telefon dahil tüm ağ arayüzlerine aç
     port: 3000,
     proxy: {
       '/api': {

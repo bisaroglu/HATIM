@@ -83,7 +83,15 @@ function LoginForm() {
       await login({ email, password })
       navigate(from, { replace: true })
     } catch {
-      // Hata auth.store'dan gelir, burada sadece form reset'ten kaçınıyoruz
+      /*
+       * store.error  → alert banner (zaten error state'ten okunuyor)
+       * store.fieldErrors → alan bazlı sunucu hataları local state'e merge et
+       * (kullanıcı yazmaya başlayınca onChange handler ilgili alanı temizler)
+       */
+      const serverFieldErrs = useAuthStore.getState().fieldErrors
+      if (serverFieldErrs) {
+        setFieldErrors((prev) => ({ ...prev, ...serverFieldErrs }))
+      }
     }
   }
 
@@ -218,7 +226,10 @@ function SignUpForm() {
       await register({ firstName: firstName.trim(), lastName: lastName.trim(), email, password })
       navigate('/', { replace: true })
     } catch {
-      // Hata auth.store'dan gelir
+      const serverFieldErrs = useAuthStore.getState().fieldErrors
+      if (serverFieldErrs) {
+        setFieldErrors((prev) => ({ ...prev, ...serverFieldErrs }))
+      }
     }
   }
 

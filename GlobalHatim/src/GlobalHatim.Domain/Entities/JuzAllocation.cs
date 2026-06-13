@@ -55,7 +55,9 @@ public sealed class JuzAllocation : BaseEntity
     public string AssigneeName => IsAssignedToUser
         ? AssignedUser?.FullName ?? "Kayıtlı Kullanıcı"
         : IsAssignedToGuest
-            ? $"{GuestFirstName} {GuestLastName}"
+            ? string.IsNullOrWhiteSpace(GuestLastName)
+                ? GuestFirstName!                          // Proxy: sadece tek isim
+                : $"{GuestFirstName} {GuestLastName}"      // Gerçek misafir: ad + soyad
             : "—";
 
     private JuzAllocation() { }
@@ -89,19 +91,19 @@ public sealed class JuzAllocation : BaseEntity
     }
 
     // ── Misafire atama ───────────────────────────────────────────
-    public void AssignToGuest(string firstName, string lastName, string guestToken, DateTimeOffset deadline)
+    /// <param name="lastName">Opsiyonel. Null veya boş geçilirse yalnızca <paramref name="firstName"/> saklanır.</param>
+    public void AssignToGuest(string firstName, string? lastName, string guestToken, DateTimeOffset deadline)
     {
         EnsureAvailable();
 
         if (string.IsNullOrWhiteSpace(firstName))
             throw new DomainException("Misafir adı boş olamaz.");
-        if (string.IsNullOrWhiteSpace(lastName))
-            throw new DomainException("Misafir soyadı boş olamaz.");
+        // lastName opsiyonel — tek isim yeterliyse null bırakılabilir
         if (string.IsNullOrWhiteSpace(guestToken))
             throw new DomainException("Misafir token'ı boş olamaz.");
 
         GuestFirstName = firstName.Trim();
-        GuestLastName  = lastName.Trim();
+        GuestLastName  = string.IsNullOrWhiteSpace(lastName) ? null : lastName.Trim();
         GuestToken     = guestToken;
         Status         = JuzAllocationStatus.Assigned;
         AssignedAt     = DateTimeOffset.UtcNow;
@@ -109,6 +111,32 @@ public sealed class JuzAllocation : BaseEntity
         MarkUpdated();
 
         RaiseDomainEvent(new JuzAssignedToGuestEvent(Id, HatimId, JuzNumber, GuestFirstName, GuestLastName));
+    }
+
+    // ── Vekaleten atama (Hatim sahibi başkası adına) ─────────────
+    /// <summary>
+    /// Hatim yöneticisinin başkası adına (görme engelli yakın, yaşlı vb.) cüz ataması.
+    /// AssignedUserId set edilmez; cüz grid'inde yalnızca <paramref name="proxyDisplayName"/>
+    /// gösterilir. GuestLastName kasıtlı olarak boş bırakılır.
+    /// </summary>
+    public void AssignToProxy(string proxyDisplayName, string guestToken, DateTimeOffset deadline)
+    {
+        EnsureAvailable();
+
+        if (string.IsNullOrWhiteSpace(proxyDisplayName))
+            throw new DomainException("Vekil adı boş olamaz.");
+        if (string.IsNullOrWhiteSpace(guestToken))
+            throw new DomainException("Misafir token'ı boş olamaz.");
+
+        GuestFirstName = proxyDisplayName.Trim();
+        GuestLastName  = null;   // Sadece tek isim yeterli; AssigneeName bunu düzgün gösterir
+        GuestToken     = guestToken;
+        Status         = JuzAllocationStatus.Assigned;
+        AssignedAt     = DateTimeOffset.UtcNow;
+        DeadlineAt     = deadline;
+        MarkUpdated();
+
+        RaiseDomainEvent(new JuzAssignedToGuestEvent(Id, HatimId, JuzNumber, GuestFirstName, string.Empty));
     }
 
     // ── Okumayı tamamla (Assigned → Completed) ──────────────────

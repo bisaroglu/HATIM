@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 namespace GlobalHatim.Infrastructure.BackgroundWorkers;
 
 /// <summary>
-/// Dönerli hatimler (Plan B = WeeklyNoAccel, Plan E/F = LongTermHybrid) için
+/// Döngülü hatimler (PlanType = Cyclic) için
 /// rotation_schedule tablosunu saatlik kontrol eden arka plan işçisi.
 ///
 /// Akış:
@@ -16,24 +16,61 @@ namespace GlobalHatim.Infrastructure.BackgroundWorkers;
 ///   2. İlgili hatimin CurrentCycle'ı artırılır (AdvanceCycle).
 ///   3. Mevcut döngüdeki tüm Available olmayan cüzler yeni döngü için sıfırlanır.
 ///   4. RotationSchedule.MarkExecuted() ile satır işaretlenir.
+///
+/// Tasarım zamanı araçları (dotnet ef migrations, dotnet ef database update) hostu
+/// kısa süreliğine başlatır ama <see cref="IHostApplicationLifetime.ApplicationStarted"/>
+/// sinyalini göndermeden durdurur. Worker bu sinyal gelene kadar bekleyerek DB sorgusunu
+/// asla tetiklemez — migration Catch-22'sini köklü biçimde çözer.
 /// </summary>
 public sealed class HatimRotationWorker : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromHours(1);
 
-    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IServiceScopeFactory         _scopeFactory;
     private readonly ILogger<HatimRotationWorker> _logger;
+    private readonly IHostApplicationLifetime     _appLifetime;
 
-    public HatimRotationWorker(IServiceScopeFactory scopeFactory, ILogger<HatimRotationWorker> logger)
+    public HatimRotationWorker(
+        IServiceScopeFactory         scopeFactory,
+        ILogger<HatimRotationWorker> logger,
+        IHostApplicationLifetime     appLifetime)
     {
         _scopeFactory = scopeFactory;
         _logger       = logger;
+        _appLifetime  = appLifetime;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("HatimRotationWorker başlatıldı. Kontrol aralığı: {Interval}", Interval);
+        _logger.LogInformation("HatimRotationWorker kaydedildi. ApplicationStarted bekleniyor…");
 
+        // ── Uygulama tamamen ayağa kalkana kadar bekle ────────────────────────
+        // ApplicationStarted + stoppingToken'ı bağla:
+        //   • Normal çalışma  → ApplicationStarted tetiklenir → döngüye gir
+        //   • dotnet ef araçları → ApplicationStarted asla gelmez,
+        //     host durduğunda stoppingToken iptal olur → worker sessizce çıkar
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+            _appLifetime.ApplicationStarted,
+            stoppingToken);
+
+        try
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, linkedCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // ApplicationStarted geldiyse devam et; yoksa (stoppingToken) erken çık.
+            if (!_appLifetime.ApplicationStarted.IsCancellationRequested)
+            {
+                _logger.LogInformation(
+                    "HatimRotationWorker: uygulama başlamadan önce durduruldu (tasarım zamanı veya erken çıkış).");
+                return;
+            }
+        }
+
+        _logger.LogInformation("HatimRotationWorker başladı. Kontrol aralığı: {Interval}", Interval);
+
+        // ── Ana döngü ─────────────────────────────────────────────────────────
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -64,7 +101,7 @@ public sealed class HatimRotationWorker : BackgroundService
                 rs.ScheduledDate <= today
                 && rs.ActualRotationDate == null
                 && rs.Hatim.Status == HatimStatus.Active
-                && (rs.Hatim.PlanType == PlanType.WeeklyNoAccel || rs.Hatim.PlanType == PlanType.LongTermHybrid))
+                && rs.Hatim.PlanType == PlanType.Cyclic)   // Sadece döngülü hatimler rotate olur
             .ToListAsync(ct);
 
         if (dueSchedules.Count == 0)

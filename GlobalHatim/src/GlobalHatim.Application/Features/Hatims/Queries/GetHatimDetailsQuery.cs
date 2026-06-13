@@ -39,6 +39,7 @@ public sealed record HatimDetailsDto(
     int       CurrentCycle,
     int       TotalCycles,
     int       TotalParticipants,
+    Guid      CreatorId,
     string    CreatorName,
     string?   CategoryName,
     IReadOnlyList<JuzSlotDto> JuzSlots
@@ -56,18 +57,34 @@ public sealed class GetHatimDetailsQueryHandler : IRequestHandler<GetHatimDetail
         GetHatimDetailsQuery request,
         CancellationToken    cancellationToken)
     {
+        // ── 1. Hatim + ilişkili meta veriler (JuzAllocations yok) ────────────
+        // Filtered Include içinde "h.CurrentCycle" gibi üst entity özelliği
+        // kullanılamaz; EF Core bunu SQL'e çeviremez.
+        // Çözüm: önce hatimi yükle → CurrentCycle'ı sabit değer olarak al →
+        //        ardından JuzAllocations'ı ayrı sorguda çek.
         var hatim = await _db.Hatims
             .AsNoTracking()
             .Include(h => h.Creator)
             .Include(h => h.Category)
             .Include(h => h.Participants)
-            .Include(h => h.JuzAllocations.Where(a => a.CycleNumber == h.CurrentCycle))
-                .ThenInclude(a => a.AssignedUser)
             .FirstOrDefaultAsync(h => h.Id == request.HatimId, cancellationToken)
             ?? throw new InvalidOperationException("Hatim bulunamadı.");
 
-        var juzSlots = hatim.JuzAllocations
+        // ── 2. Mevcut döngüdeki cüzleri ayrı sorguyla çek ───────────────────
+        // Sabit değer (hatim.CurrentCycle) kullanıldığı için EF Core tam
+        // olarak SQL'e çevirebilir; AssignedUser'ı da tek JOIN ile alır.
+        var currentCycle = hatim.CurrentCycle;
+
+        var rawAllocations = await _db.JuzAllocations
+            .AsNoTracking()
+            .Include(a => a.AssignedUser)
+            .Where(a => a.HatimId     == request.HatimId
+                     && a.CycleNumber == currentCycle)
             .OrderBy(a => a.JuzNumber)
+            .ToListAsync(cancellationToken);
+
+        // ── 3. DTO dönüşümü — bellek üzerinde, EF çeviri riski yok ─────────
+        var juzSlots = rawAllocations
             .Select(a => new JuzSlotDto(
                 AllocationId:      a.Id,
                 JuzNumber:         a.JuzNumber,
@@ -92,6 +109,7 @@ public sealed class GetHatimDetailsQueryHandler : IRequestHandler<GetHatimDetail
             CurrentCycle:      hatim.CurrentCycle,
             TotalCycles:       hatim.TotalCycles,
             TotalParticipants: hatim.Participants.Count,
+            CreatorId:         hatim.CreatorUserId,
             CreatorName:       hatim.Creator.FullName,
             CategoryName:      hatim.Category?.NameTr,
             JuzSlots:          juzSlots);

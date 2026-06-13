@@ -6,25 +6,28 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GlobalHatim.Application.Features.JuzAllocations.Commands;
 
-// ── Command ──────────────────────────────────────────────────────────────────
+// -- Command ------------------------------------------------------------------
 
 /// <summary>
-/// Boştaki (Available) bir cüzü kullanıcı veya misafire atar (Assigned).
+/// Bostaki (Available) bir cüzü kullanici veya misafire atar (Assigned).
 ///
-/// Akış:
+/// Akis:
 ///   1. Hatim aktif mi? Belirtilen cüz Available mi?
-///   2. Kayıtlı kullanıcı → AssignToUser()
-///      Misafir           → IGuestTokenService ile token üret → AssignToGuest()
+///   2. Kayitli kullanici -> AssignToUser()
+///      Misafir           -> IGuestTokenService ile token üret -> AssignToGuest()
+///      Vekaleten (Proxy) -> IGuestTokenService ile token üret -> AssignToProxy()
 ///   3. SaveChangesAsync
 /// </summary>
 public sealed record AllocateJuzCommand(
     Guid    HatimId,
     int     JuzNumber,
-    // Kayıtlı kullanıcı alanları
+    // Kayitli kullanici alanlari
     Guid?   UserId,
-    // Misafir alanları (UserId null ise zorunlu)
+    // Misafir alanlari (UserId null ise zorunlu)
     string? GuestFirstName,
-    string? GuestLastName
+    string? GuestLastName,
+    // Vekaleten atama: Hatim sahibi baskasi adina cüz alir
+    string? ProxyName = null
 ) : IRequest<AllocateJuzResult>;
 
 public sealed record AllocateJuzResult(
@@ -32,39 +35,40 @@ public sealed record AllocateJuzResult(
     Guid   HatimId,
     int    JuzNumber,
     string AssigneeName,
-    /// <summary>Yalnızca misafir atamasında dolu gelir; client'ın güvenli saklaması gerekir.</summary>
+    /// <summary>Yalnizca misafir atamasinda dolu gelir; client'in güvenli saklamasi gerekir.</summary>
     string? GuestToken
 );
 
-// ── Validator ─────────────────────────────────────────────────────────────────
+// -- Validator ----------------------------------------------------------------
 
 public sealed class AllocateJuzCommandValidator : AbstractValidator<AllocateJuzCommand>
 {
     public AllocateJuzCommandValidator()
     {
         RuleFor(x => x.HatimId)
-            .NotEmpty().WithMessage("HatimId boş olamaz.");
+            .NotEmpty().WithMessage("HatimId bos olamaz.");
 
         RuleFor(x => x.JuzNumber)
-            .InclusiveBetween(1, 30).WithMessage("Cüz numarası 1-30 arasında olmalıdır.");
+            .InclusiveBetween(1, 30).WithMessage("Cüz numarasi 1-30 arasinda olmalidir.");
 
-        // UserId yoksa misafir alanları zorunlu
-        When(x => !x.UserId.HasValue, () =>
+        // UserId yoksa ve ProxyName de yoksa -> misafir akisi: en az GuestFirstName zorunlu
+        // GuestLastName opsiyonel; tek isim yeterliyse bos birakilabilir
+        When(x => !x.UserId.HasValue && string.IsNullOrWhiteSpace(x.ProxyName), () =>
         {
             RuleFor(x => x.GuestFirstName)
-                .NotEmpty().WithMessage("Misafir adı zorunludur.");
-            RuleFor(x => x.GuestLastName)
-                .NotEmpty().WithMessage("Misafir soyadı zorunludur.");
+                .NotEmpty().WithMessage("Misafir adi zorunludur.");
         });
 
-        // Her ikisi birden doluysa hata
+        // UserId var + GuestFirstName var + ProxyName yok -> hata
         RuleFor(x => x)
-            .Must(x => !(x.UserId.HasValue && !string.IsNullOrWhiteSpace(x.GuestFirstName)))
-            .WithMessage("UserId ve GuestFirstName aynı anda sağlanamaz.");
+            .Must(x => !(x.UserId.HasValue
+                         && !string.IsNullOrWhiteSpace(x.GuestFirstName)
+                         && string.IsNullOrWhiteSpace(x.ProxyName)))
+            .WithMessage("UserId ve GuestFirstName ayni anda saglanamaz (ProxyName kullanin).");
     }
 }
 
-// ── Handler ───────────────────────────────────────────────────────────────────
+// -- Handler ------------------------------------------------------------------
 
 public sealed class AllocateJuzCommandHandler : IRequestHandler<AllocateJuzCommand, AllocateJuzResult>
 {
@@ -81,15 +85,15 @@ public sealed class AllocateJuzCommandHandler : IRequestHandler<AllocateJuzComma
         AllocateJuzCommand request,
         CancellationToken  cancellationToken)
     {
-        // ── 1. Hatim kontrolü ────────────────────────────────────────────────
+        // -- 1. Hatim kontrolü -----------------------------------------------
         var hatim = await _db.Hatims
             .FirstOrDefaultAsync(h => h.Id == request.HatimId, cancellationToken)
-            ?? throw new InvalidOperationException("Hatim bulunamadı.");
+            ?? throw new InvalidOperationException("Hatim bulunamadi.");
 
         if (hatim.Status != Domain.Enums.HatimStatus.Active)
-            throw new InvalidOperationException("Yalnızca aktif hatimlere cüz atanabilir.");
+            throw new InvalidOperationException("Yalnizca aktif hatimlere cüz atanabilir.");
 
-        // ── 2. Allocation kontrolü ───────────────────────────────────────────
+        // -- 2. Allocation kontrolü ------------------------------------------
         var allocation = await _db.JuzAllocations
             .FirstOrDefaultAsync(
                 a => a.HatimId     == request.HatimId
@@ -97,31 +101,39 @@ public sealed class AllocateJuzCommandHandler : IRequestHandler<AllocateJuzComma
                   && a.CycleNumber == hatim.CurrentCycle,
                 cancellationToken)
             ?? throw new InvalidOperationException(
-                $"Cüz {request.JuzNumber} bu hatimde bulunamadı.");
+                $"Cüz {request.JuzNumber} bu hatimde bulunamadi.");
 
         if (allocation.Status != JuzAllocationStatus.Available)
             throw new InvalidOperationException(
-                $"Cüz {request.JuzNumber} şu anda müsait değil. Mevcut durum: {allocation.Status}");
+                $"Cüz {request.JuzNumber} su anda müsait degil. Mevcut durum: {allocation.Status}");
 
-        // ── 3. Deadline hesapla (PlanType'a göre basit kural) ────────────────
-        var deadline = hatim.PlanType switch
+        // -- 3. Deadline hesapla — ReadPacing'e göre kesin kural ------------
+        var deadline = hatim.ReadPacing switch
         {
-            PlanType.WeeklyNoAccel  => DateTimeOffset.UtcNow.AddDays(7),
-            PlanType.LongTermHybrid => DateTimeOffset.UtcNow.AddDays(14),
-            _                        => DateTimeOffset.UtcNow.AddDays(3)
+            ReadPacing.Daily1Juz      => DateTimeOffset.UtcNow.AddDays(1),
+            ReadPacing.Every2Days1Juz => DateTimeOffset.UtcNow.AddDays(2),
+            ReadPacing.Every4Days1Juz => DateTimeOffset.UtcNow.AddDays(4),
+            _                          => DateTimeOffset.UtcNow.AddDays(7)
         };
 
-        // ── 4. Atama ─────────────────────────────────────────────────────────
+        // -- 4. Atama --------------------------------------------------------
         string? guestToken = null;
 
-        if (request.UserId.HasValue)
+        if (!string.IsNullOrWhiteSpace(request.ProxyName))
         {
-            // Kayıtlı kullanıcı var mı?
+            // Vekaleten atama: Hatim sahibi baskasi adina cüz aliyor.
+            // UserId kaydedilmez; cüz grid'inde ProxyName gösterilir.
+            guestToken = await _guestTokenService.GenerateAsync(allocation.Id, cancellationToken);
+            allocation.AssignToProxy(request.ProxyName, guestToken, deadline);
+        }
+        else if (request.UserId.HasValue)
+        {
+            // Kayitli kullanici
             var userExists = await _db.Users
                 .AnyAsync(u => u.Id == request.UserId.Value && u.IsActive, cancellationToken);
 
             if (!userExists)
-                throw new InvalidOperationException("Kullanıcı bulunamadı veya pasif.");
+                throw new InvalidOperationException("Kullanici bulunamadi veya pasif.");
 
             allocation.AssignToUser(request.UserId.Value, deadline);
         }
@@ -137,7 +149,7 @@ public sealed class AllocateJuzCommandHandler : IRequestHandler<AllocateJuzComma
                 deadline);
         }
 
-        // ── 5. Kaydet ────────────────────────────────────────────────────────
+        // -- 5. Kaydet -------------------------------------------------------
         await _db.SaveChangesAsync(cancellationToken);
 
         return new AllocateJuzResult(

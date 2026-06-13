@@ -1,12 +1,15 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import type { Participant } from '@/components/common'
-import { hatimService } from '@/services/hatim.service'
+import { hatimService, FRONTEND_TO_BACKEND_TYPE } from '@/services/hatim.service'
+import { parseApiError } from '@/utils/apiError'
+import { useAuthStore } from '@/store/auth.store'
+import { useDebounce } from './useDebounce'
 
 // ─── Tip tanımları ────────────────────────────────────────────────────────────
 
-export type HatimType = 'sabit' | 'döngülü' | 'günlük' | 'haftalık'
-export type HatimStatus = 'active' | 'upcoming' | 'completed'
-export type FilterType = 'all' | HatimType
+export type HatimType     = 'sabit' | 'döngülü' | 'günlük' | 'haftalık'
+export type HatimStatus   = 'active' | 'upcoming' | 'completed'
+export type FilterType    = 'all' | HatimType
 
 export interface HatimListItem {
   id: string
@@ -22,123 +25,7 @@ export interface HatimListItem {
   startDate?: string
 }
 
-// ─── Mock veri ────────────────────────────────────────────────────────────────
-
-const MOCK_HATIMS: HatimListItem[] = [
-  {
-    id: 'h1',
-    title: 'Ramazan Hatmi - İstanbul',
-    description: 'Birlikte Ramazan ayında tam bir hatim indiriyoruz. Her gün bir cüz.',
-    type: 'sabit',
-    completedJuz: 15,
-    totalJuz: 30,
-    participantCount: 24,
-    status: 'active',
-    isJoined: false,
-    participants: [
-      { id: 'p1', initials: 'AY', bgColor: 'bg-amber-500' },
-      { id: 'p2', initials: 'MK', bgColor: 'bg-sky-500' },
-      { id: 'p3', initials: 'FÇ', bgColor: 'bg-emerald-500' },
-      { id: 'p4', initials: 'HB', bgColor: 'bg-violet-500' },
-      { id: 'p5', initials: 'ZY', bgColor: 'bg-rose-500' },
-    ],
-  },
-  {
-    id: 'h2',
-    title: 'Haftalık Aile Hatmi',
-    description: 'Aile üyeleri arasında haftalık dönen hatim grubumuz.',
-    type: 'döngülü',
-    completedJuz: 28,
-    totalJuz: 30,
-    participantCount: 7,
-    status: 'active',
-    isJoined: true,
-    participants: [
-      { id: 'p6', initials: 'SK', bgColor: 'bg-sky-500' },
-      { id: 'p7', initials: 'NE', bgColor: 'bg-violet-500' },
-    ],
-  },
-  {
-    id: 'h3',
-    title: 'Küresel Dua Hatmi',
-    description: 'Dünya çapında binlerce kişinin katılımıyla gerçekleşen organizasyon.',
-    type: 'sabit',
-    completedJuz: 5,
-    totalJuz: 30,
-    participantCount: 1200,
-    status: 'active',
-    isJoined: false,
-    participants: [
-      { id: 'p8', initials: 'BT', bgColor: 'bg-amber-500' },
-      { id: 'p9', initials: 'OK', bgColor: 'bg-emerald-500' },
-    ],
-  },
-  {
-    id: 'h4',
-    title: 'İstanbul Gençlik Anması',
-    description: 'Gençlik anması için özel, döngülü bir hatim grubu.',
-    type: 'sabit',
-    completedJuz: 5,
-    totalJuz: 30,
-    participantCount: 18,
-    status: 'upcoming',
-    isJoined: false,
-    startDate: '15 Oca',
-    participants: [
-      { id: 'p10', initials: 'EY', bgColor: 'bg-rose-500' },
-    ],
-  },
-  {
-    id: 'h5',
-    title: 'Günlük Sabah Hatmi',
-    description: 'Her sabah fecir vakti okunan günlük hatim programı.',
-    type: 'günlük',
-    completedJuz: 12,
-    totalJuz: 30,
-    participantCount: 45,
-    status: 'active',
-    isJoined: false,
-    participants: [
-      { id: 'p11', initials: 'CM', bgColor: 'bg-teal-500' },
-      { id: 'p12', initials: 'AD', bgColor: 'bg-sky-500' },
-      { id: 'p13', initials: 'RK', bgColor: 'bg-amber-500' },
-    ],
-  },
-  {
-    id: 'h6',
-    title: 'Haftalık Cuma Hatmi',
-    description: 'Cuma günleri yapılan haftalık topluluk okuması.',
-    type: 'haftalık',
-    completedJuz: 20,
-    totalJuz: 30,
-    participantCount: 33,
-    status: 'active',
-    isJoined: false,
-    participants: [
-      { id: 'p14', initials: 'YD', bgColor: 'bg-violet-500' },
-      { id: 'p15', initials: 'SB', bgColor: 'bg-emerald-500' },
-    ],
-  },
-]
-
-// ─── API yanıtını dönüştür ────────────────────────────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapApiToItem(item: any): HatimListItem {
-  return {
-    id: String(item.id ?? ''),
-    title: String(item.title ?? ''),
-    description: String(item.description ?? ''),
-    type: 'sabit',
-    completedJuz: Number(item.completedCount ?? 0),
-    totalJuz: 30,
-    participantCount: Number(item.participantCount ?? 0),
-    status: (item.status as HatimStatus) ?? 'active',
-    isJoined: false,
-    participants: [],
-  }
-}
-
-// ─── Hook ─────────────────────────────────────────────────────────────────────
+// ─── Hook seçenekleri / sonucu ────────────────────────────────────────────────
 
 interface UseHatimsOptions {
   search: string
@@ -146,73 +33,93 @@ interface UseHatimsOptions {
   tab: 'all' | 'mine'
 }
 
-interface UseHatimsResult {
-  hatims: HatimListItem[]
-  allHatims: HatimListItem[]
-  isLoading: boolean
-  error: string | null
-  refetch: () => void
+export interface GuestJoinInfo {
+  guestFirstName: string
+  guestLastName:  string
 }
 
-export function useHatims({ search, filter, tab }: UseHatimsOptions): UseHatimsResult {
-  const [allHatims, setAllHatims] = useState<HatimListItem[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [tick, setTick] = useState(0)
+interface UseHatimsResult {
+  hatims: HatimListItem[]
+  isLoading: boolean
+  isInitialLoading: boolean
+  error: string | null
+  refetch: () => void
+  joinHatim: (id: string, guestInfo?: GuestJoinInfo) => Promise<void>
+}
 
-  const refetch = () => setTick((t) => t + 1)
+// ─── Hook ─────────────────────────────────────────────────────────────────────
+
+export function useHatims({ search, filter, tab }: UseHatimsOptions): UseHatimsResult {
+  const user = useAuthStore((s) => s.user)
+
+  const [hatims, setHatims]              = useState<HatimListItem[]>([])
+  const [isLoading, setIsLoading]        = useState(false)
+  const [isInitialLoading, setIsInitial] = useState(true)
+  const [error, setError]                = useState<string | null>(null)
+  const [tick, setTick]                  = useState(0)
+
+  const debouncedSearch = useDebounce(search, 400)
+  const refetch = useCallback(() => setTick((t) => t + 1), [])
 
   useEffect(() => {
     let cancelled = false
     setIsLoading(true)
     setError(null)
 
+    const params: Parameters<typeof hatimService.getAll>[0] = { page: 1, pageSize: 50 }
+    if (debouncedSearch.trim())  params.search = debouncedSearch.trim()
+    if (filter !== 'all')        params.type   = FRONTEND_TO_BACKEND_TYPE[filter]
+    if (tab === 'mine')          params.joined = true
+
     hatimService
-      .getAll({ page: 1, pageSize: 50 })
-      .then((res) => {
+      .getAll(params)
+      .then((items) => {
         if (cancelled) return
-        if (res.items.length > 0) {
-          setAllHatims(res.items.map(mapApiToItem))
-        } else {
-          setAllHatims(MOCK_HATIMS)
-        }
+        setHatims(items)
+        setError(null)
       })
-      .catch(() => {
-        if (!cancelled) setAllHatims(MOCK_HATIMS)
+      .catch((err) => {
+        if (cancelled) return
+        const { message } = parseApiError(err)
+        setError(message)
       })
       .finally(() => {
-        if (!cancelled) setIsLoading(false)
+        if (!cancelled) {
+          setIsLoading(false)
+          setIsInitial(false)
+        }
       })
 
     return () => { cancelled = true }
-  }, [tick])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, filter, tab, tick])
 
-  // Client-side arama + filtre — gerçek API'de query param olarak geçilecek
-  const hatims = useMemo(() => {
-    let result = allHatims
+  // ── joinHatim — optimistic update ──────────────────────────────────────────
+  const joinHatim = useCallback(async (id: string, guestInfo?: GuestJoinInfo) => {
+    // Optimistic: UI'da hemen joined göster
+    setHatims((prev) => prev.map((h) => (h.id === id ? { ...h, isJoined: true } : h)))
 
-    // Tab filtresi
-    if (tab === 'mine') {
-      result = result.filter((h) => h.isJoined)
+    try {
+      if (user?.id) {
+        // Kayitli kullanici akisi
+        await hatimService.join(id, { userId: user.id })
+      } else {
+        // Misafir akisi — guestInfo caller tarafindan saglanmali
+        if (!guestInfo?.guestFirstName || !guestInfo?.guestLastName) {
+          throw new Error('Misafir olarak katilmak icin ad ve soyad gereklidir.')
+        }
+        await hatimService.join(id, {
+          guestFirstName: guestInfo.guestFirstName,
+          guestLastName:  guestInfo.guestLastName,
+        })
+      }
+    } catch (err) {
+      // Hata durumunda geri al
+      setHatims((prev) => prev.map((h) => (h.id === id ? { ...h, isJoined: false } : h)))
+      const { message } = parseApiError(err)
+      setError(message)
     }
+  }, [user?.id])
 
-    // Tür filtresi
-    if (filter !== 'all') {
-      result = result.filter((h) => h.type === filter)
-    }
-
-    // Arama
-    const q = search.trim().toLowerCase()
-    if (q) {
-      result = result.filter(
-        (h) =>
-          h.title.toLowerCase().includes(q) ||
-          h.description.toLowerCase().includes(q),
-      )
-    }
-
-    return result
-  }, [allHatims, search, filter, tab])
-
-  return { hatims, allHatims, isLoading, error, refetch }
+  return { hatims, isLoading, isInitialLoading, error, refetch, joinHatim }
 }

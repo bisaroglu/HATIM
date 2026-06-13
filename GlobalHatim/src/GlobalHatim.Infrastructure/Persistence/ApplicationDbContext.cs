@@ -22,14 +22,16 @@ public sealed class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<ReadingLog>       ReadingLogs       => Set<ReadingLog>();
     public DbSet<RotationSchedule> RotationSchedules => Set<RotationSchedule>();
     public DbSet<ContactMessage>   ContactMessages   => Set<ContactMessage>();
+    public DbSet<Feedback>         Feedbacks         => Set<Feedback>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
 
-        // PostgreSQL enum registrations
-        modelBuilder.HasPostgresEnum<Domain.Enums.PlanType>("plan_type");
+        // PostgreSQL native enum registrations
+        // Not: PlanType ve ReadPacing .HasConversion<string>() ile TEXT olarak saklanır;
+        //      HasPostgresEnum gereksiz — kaldırıldı.
         modelBuilder.HasPostgresEnum<Domain.Enums.HatimStatus>("hatim_status");
         modelBuilder.HasPostgresEnum<Domain.Enums.JuzAllocationStatus>("juz_allocation_status");
         modelBuilder.HasPostgresEnum<Domain.Enums.ParticipantRole>("participant_role");

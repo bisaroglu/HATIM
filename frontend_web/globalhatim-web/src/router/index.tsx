@@ -5,9 +5,11 @@ import { MainLayout, ProtectedRoute } from '@/components/layout'
 // ─── Lazy-loaded sayfalar ─────────────────────────────────────────────────────
 const HomePage       = lazy(() => import('@/pages/public/HomePage'))
 const HakkimizdaPage = lazy(() => import('@/pages/public/HakkimizdaPage'))
+const FeedbackPage   = lazy(() => import('@/pages/public/FeedbackPage'))
 const HatimlerPage   = lazy(() => import('@/pages/hatim/HatimlerPage'))
 const HatimDetayPage = lazy(() => import('@/pages/hatim/HatimDetayPage'))
 const ProfilPage     = lazy(() => import('@/pages/profile/ProfilPage'))
+const AiChatPage     = lazy(() => import('@/pages/ai/AiChatPage'))
 const AuthPage       = lazy(() => import('@/pages/auth/AuthPage'))
 const NotFoundPage   = lazy(() => import('@/pages/public/NotFoundPage'))
 
@@ -46,9 +48,11 @@ const router = createBrowserRouter([
     element: <MainLayout />,
     children: [
       { path: '/',            element: wrap(HomePage) },
-      { path: '/hakkimizda',  element: wrap(HakkimizdaPage) },
-      { path: '/hatimler',    element: wrap(HatimlerPage) },
+      { path: '/hakkimizda',      element: wrap(HakkimizdaPage) },
+      { path: '/geri-bildirim',   element: wrap(FeedbackPage) },
+      { path: '/hatimler',        element: wrap(HatimlerPage) },
       { path: '/hatimler/:id', element: wrap(HatimDetayPage) },
+      { path: '/ai-asistan',  element: wrap(AiChatPage) },
       {
         path: '/profilim',
         element: (

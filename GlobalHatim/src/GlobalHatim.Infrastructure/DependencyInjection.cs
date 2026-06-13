@@ -1,6 +1,7 @@
 using GlobalHatim.Application.Common.Interfaces;
 using GlobalHatim.Infrastructure.BackgroundWorkers;
 using GlobalHatim.Infrastructure.Persistence;
+using GlobalHatim.Infrastructure.Services.Ai;
 using GlobalHatim.Infrastructure.Services.GuestToken;
 using GlobalHatim.Infrastructure.Services.Jwt;
 using GlobalHatim.Infrastructure.Services.Redis;
@@ -49,6 +50,10 @@ public static class DependencyInjection
 
         // ── JwtService ────────────────────────────────────────────────────
         services.AddSingleton<IJwtService, JwtService>();
+
+        // ── Gemini AI ─────────────────────────────────────────────────────
+        // HttpClient, IHttpClientFactory üzerinden yönetilir (connection pooling).
+        services.AddHttpClient<IAiService, GeminiAiService>();
 
         // ── Background Workers ────────────────────────────────────────────
         services.AddHostedService<HatimRotationWorker>();

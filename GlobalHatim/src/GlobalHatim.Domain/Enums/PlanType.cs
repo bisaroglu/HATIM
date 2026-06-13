@@ -1,21 +1,21 @@
 namespace GlobalHatim.Domain.Enums;
 
 /// <summary>
-/// Hatim rotasyon planı türleri.
-/// Plan A, C, D, G tasarım kapsamı dışındadır.
+/// Hatimin türü / kategorisi.
+/// Frontende "Sabit", "Döngülü", "Günlük", "Haftalık" olarak yansır.
+/// DB'de string olarak saklanır (.HasConversion&lt;string&gt;()).
 /// </summary>
 public enum PlanType
 {
-    /// <summary>Plan B — Her 2 günde 1 cüz okunur.</summary>
-    Every2Days1Juz = 1,
+    /// <summary>Sabit hatim — belirli bir süre, belirli bir tempo.</summary>
+    Fixed  = 1,
 
-    /// <summary>Plan E — Haftada 1 cüz; Ramazan'da hız değişmez.</summary>
-    WeeklyNoAccel = 2,
+    /// <summary>Döngülü hatim — hatim tamamlandıkça yeni döngü başlar.</summary>
+    Cyclic = 2,
 
-    /// <summary>
-    /// Plan F — Uzun vadeli karma rotasyon.
-    /// Ramazan'da: 1 aylık sabit cüz planı.
-    /// Yılın geri kalanında: Her 4 ayda bir sonraki cüze geçiş.
-    /// </summary>
-    LongTermHybrid = 3
+    /// <summary>Günlük hatim — her gün 1 cüz okunur.</summary>
+    Daily  = 3,
+
+    /// <summary>Haftalık hatim — haftada 1 cüz okunur.</summary>
+    Weekly = 4,
 }

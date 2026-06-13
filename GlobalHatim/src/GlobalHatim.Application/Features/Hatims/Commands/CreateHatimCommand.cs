@@ -15,14 +15,15 @@ namespace GlobalHatim.Application.Features.Hatims.Commands;
 /// Ardından 30 adet JuzAllocation kaydı AVAILABLE durumunda eklenir.
 /// </summary>
 public sealed record CreateHatimCommand(
-    string    Title,
-    string?   Description,
-    Guid      CreatorUserId,
-    PlanType  PlanType,
-    DateOnly  StartDate,
-    bool      IsPublic,
-    int?      CategoryId,
-    DateOnly? EndDate
+    string      Title,
+    string?     Description,
+    Guid        CreatorUserId,
+    PlanType    PlanType,
+    ReadPacing  ReadPacing,
+    DateOnly    StartDate,
+    bool        IsPublic,
+    int?        CategoryId,
+    DateOnly?   EndDate
 ) : IRequest<CreateHatimResult>;
 
 public sealed record CreateHatimResult(
@@ -85,6 +86,7 @@ public sealed class CreateHatimCommandHandler
             description:   request.Description,
             creatorUserId: request.CreatorUserId,
             planType:      request.PlanType,
+            readPacing:    request.ReadPacing,
             startDate:     request.StartDate,
             isPublic:      request.IsPublic,
             categoryId:    request.CategoryId,
